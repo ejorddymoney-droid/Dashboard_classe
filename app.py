@@ -3,279 +3,258 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from io import BytesIO
+from datetime import datetime
 
-# --- PAGE CONFIGURATION ---
+# --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="SupplyChain Pro | Inventory Optimizer",
-    page_icon="📦",
+    page_title="OptiStock Pro | Dashboard Supply Chain",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# --- CUSTOM CSS FOR PROFESSIONAL UI (Inspired by the provided image) ---
+# --- DESIGN SYSTEM (CSS PERSONNALISÉ) ---
 st.markdown("""
     <style>
-    /* Main background */
+    /* Fond principal sombre */
     .stApp {
         background-color: #0E1117;
-        color: #FFFFFF;
+        color: #E0E0E0;
     }
     
-    /* Sidebar styling */
-    section[data-testid="stSidebar"] {
-        background-color: #161B22;
-        border-right: 1px solid #30363D;
+    /* Style des cartes de KPIs */
+    [data-testid="stMetricValue"] {
+        font-size: 28px !important;
+        font-weight: 700 !important;
+        color: #00D1FF !important;
     }
-
-    /* Card-like containers */
-    div[data-testid="metric-container"] {
-        background-color: #1C2128;
-        border: 1px solid #30363D;
-        padding: 15px;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-    }
-
-    /* Custom classes for insights */
-    .insight-card {
+    
+    .stMetric {
         background-color: #1C2128;
         padding: 20px;
-        border-radius: 12px;
-        border-left: 5px solid #00D1FF;
-        margin-bottom: 10px;
+        border-radius: 15px;
+        border: 1px solid #30363D;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
 
-    .class-a { color: #00FFC2; font-weight: bold; }
-    .class-b { color: #FFD700; font-weight: bold; }
-    .class-c { color: #FF6B6B; font-weight: bold; }
+    /* Conteneurs de sections */
+    .section-container {
+        background-color: #161B22;
+        padding: 25px;
+        border-radius: 20px;
+        border: 1px solid #30363D;
+        margin-bottom: 20px;
+    }
 
-    /* Headers */
-    h1, h2, h3 {
-        font-family: 'Inter', sans-serif;
-        font-weight: 700;
+    /* Titres personnalisés */
+    .main-title {
+        font-size: 42px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        margin-bottom: 30px;
+        background: -webkit-linear-gradient(#fff, #888);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    /* Badges ABC */
+    .badge {
+        padding: 4px 12px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-size: 12px;
+    }
+    .badge-a { background-color: #00FFC2; color: #000; }
+    .badge-b { background-color: #FFD700; color: #000; }
+    .badge-c { background-color: #FF6B6B; color: #fff; }
+
+    /* Boutons */
+    .stButton>button {
+        border-radius: 10px;
+        background-color: #00D1FF;
+        color: black;
+        font-weight: bold;
+        border: none;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #00A3C7;
+        box-shadow: 0 0 15px rgba(0, 209, 255, 0.4);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- DATA INITIALIZATION ---
-def initialize_data():
-    if 'inventory_df' not in st.session_state:
-        # Initial professional sample dataset
-        data = {
-            'Article_ID': ['ITM-001', 'ITM-002', 'ITM-003', 'ITM-004', 'ITM-005', 'ITM-006', 'ITM-007', 'ITM-008'],
-            'Nom_Article': ['Engine Block V8', 'Transmission Kit', 'Fuel Injector', 'Brake Pads', 'Oil Filter', 'LED Headlight', 'Spark Plug', 'Air Filter'],
-            'Demande_Annuelle': [500, 300, 4500, 2000, 8000, 1200, 15000, 7500],
-            'Cout_Commande': [150, 200, 45, 30, 20, 80, 15, 20],
-            'Cout_Possession_Unitaire': [50, 80, 5, 4, 1.5, 12, 0.5, 1.2],
-            'Prix_Unitaire': [1200, 2500, 85, 45, 12, 150, 8, 15]
-        }
-        st.session_state.inventory_df = pd.DataFrame(data)
-
-# --- ANALYTICS ENGINE ---
-def calculate_metrics(df):
-    # Calculations with error handling
-    df = df.copy()
-    
-    # 1. Annual Consumption Value
+# --- LOGIQUE DE CALCUL (ENGINE) ---
+def perform_analytics(df):
+    # 1. Valeur de Consommation Annuelle
     df['Valeur_Annuelle'] = df['Demande_Annuelle'] * df['Prix_Unitaire']
     
-    # 2. EOQ Calculation (Standard Wilson Formula)
+    # 2. Formule de Wilson (EOQ)
     # EOQ = sqrt( (2 * D * S) / H )
-    df['EOQ'] = np.sqrt((2 * df['Demande_Annuelle'] * df['Cout_Commande']) / df['Cout_Possession_Unitaire'].replace(0, np.nan))
-    df['EOQ'] = df['EOQ'].fillna(0).round(0)
+    df['Q_Economique'] = np.sqrt((2 * df['Demande_Annuelle'] * df['Cout_Commande']) / df['Cout_Stockage_Unitaire'].replace(0, np.nan))
+    df['Q_Economique'] = df['Q_Economique'].fillna(0).round(0)
     
-    # 3. Frequency Metrics
-    df['Nombre_Commandes_An'] = (df['Demande_Annuelle'] / df['EOQ'].replace(0, np.nan)).fillna(0).round(2)
-    df['Temps_Entre_Commandes'] = (365 / df['Nombre_Commandes_An'].replace(0, np.nan)).fillna(0).round(1)
+    # 3. Fréquence et temps
+    df['Commandes_Par_An'] = (df['Demande_Annuelle'] / df['Q_Economique'].replace(0, np.nan)).fillna(0).round(1)
+    df['Rotation_Jours'] = (365 / df['Commandes_Par_An'].replace(0, np.nan)).fillna(0).round(0)
     
-    # 4. Pareto Analysis (ABC)
+    # 4. Analyse de Pareto (ABC)
     df = df.sort_values(by='Valeur_Annuelle', ascending=False)
-    total_value = df['Valeur_Annuelle'].sum()
-    df['Pourcentage_Contribution'] = (df['Valeur_Annuelle'] / total_value) * 100
-    df['Pourcentage_Cumulatif'] = df['Pourcentage_Contribution'].cumsum()
+    total_val = df['Valeur_Annuelle'].sum()
+    df['Part_Contribution'] = (df['Valeur_Annuelle'] / total_val) * 100
+    df['Cumul_Pourcentage'] = df['Part_Contribution'].cumsum()
     
-    def classify_abc(cum_perc):
-        if cum_perc <= 80: return 'A'
-        elif cum_perc <= 95: return 'B'
+    def classify(x):
+        if x <= 80: return 'A'
+        elif x <= 95: return 'B'
         else: return 'C'
-        
-    df['Classe_ABC'] = df['Pourcentage_Cumulatif'].apply(classify_abc)
+    
+    df['Classe_ABC'] = df['Cumul_Pourcentage'].apply(classify)
     return df
 
-# --- PAGE: EXECUTIVE DASHBOARD ---
-def show_executive_dashboard(df):
-    st.title("📊 Supply Chain Executive Overview")
-    
-    # Top Row KPIs
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Items", len(df))
-    with col2:
-        st.metric("Total Annual Value", f"${df['Valeur_Annuelle'].sum():,.0f}")
-    with col3:
-        st.metric("Avg Orders/Year", f"{df['Nombre_Commandes_An'].mean():.1f}")
-    with col4:
-        a_items = len(df[df['Classe_ABC'] == 'A'])
-        a_val_pct = df[df['Classe_ABC'] == 'A']['Pourcentage_Contribution'].sum()
-        st.metric("Class A Items", f"{a_items} ({a_val_pct:.1f}%)")
+# --- DONNÉES INITIALES ---
+if 'data' not in st.session_state:
+    st.session_state.data = pd.DataFrame({
+        'Article_ID': ['ART-101', 'ART-202', 'ART-303', 'ART-404', 'ART-505', 'ART-606', 'ART-707', 'ART-808'],
+        'Nom_Article': ['Moteur V6', 'Transmission Pro', 'Injecteur Fuel', 'Plaquettes Frein', 'Filtre Huile', 'Phare LED', 'Bougie Allumage', 'Filtre Air'],
+        'Demande_Annuelle': [450, 280, 5200, 1800, 9500, 1100, 14000, 8200],
+        'Cout_Commande': [120, 180, 40, 25, 15, 75, 10, 18],
+        'Cout_Stockage_Unitaire': [45.0, 75.0, 4.5, 3.8, 1.2, 10.5, 0.4, 1.1],
+        'Prix_Unitaire': [1150, 2300, 82, 42, 11, 145, 7, 14]
+    })
 
-    st.markdown("---")
+# --- BARRE LATÉRALE ---
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/3061/3061341.png", width=80)
+    st.markdown("### OptiStock Pro `v2.1`")
+    st.info(f"Heure système : {datetime.now().strftime('%H:%M')}")
     
-    col_left, col_right = st.columns([2, 1])
+    menu = st.radio(
+        "Navigation",
+        ["Tableau de Bord", "Données Brutes", "Analyse EOQ", "Analyse Pareto", "Insights Stratégiques"]
+    )
     
-    with col_left:
-        st.subheader("Pareto Analysis (Value vs. Cumulative %)")
+    st.divider()
+    if st.button("🔄 Réinitialiser"):
+        st.session_state.clear()
+        st.rerun()
+
+# Calcul des données traitées
+df_proc = perform_analytics(st.session_state.data)
+
+# --- PAGES ---
+
+if menu == "Tableau de Bord":
+    st.markdown('<h1 class="main-title">Aperçu Exécutif</h1>', unsafe_allow_html=True)
+    
+    # KPIs Top Row
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Total Articles", len(df_proc))
+    with c2:
+        st.metric("Valeur Stock Annuel", f"{df_proc['Valeur_Annuelle'].sum():,.0f} €")
+    with c3:
+        st.metric("Commandes Moy/An", f"{df_proc['Commandes_Par_An'].mean():.1f}")
+    with c4:
+        a_val = df_proc[df_proc['Classe_ABC'] == 'A']['Part_Contribution'].sum()
+        st.metric("Poids Classe A", f"{a_val:.1f}%")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col_l, col_r = st.columns([2, 1])
+    
+    with col_l:
+        st.subheader("Courbe de Pareto (ABC)")
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=df['Nom_Article'], y=df['Valeur_Annuelle'], name="Annual Value", marker_color='#00D1FF'))
-        fig.add_trace(go.Scatter(x=df['Nom_Article'], y=df['Pourcentage_Cumulatif'], name="Cumulative %", yaxis="y2", line=dict(color='#00FFC2', width=3)))
-        
+        fig.add_trace(go.Bar(x=df_proc['Nom_Article'], y=df_proc['Valeur_Annuelle'], name="Valeur (€)", marker_color='#00D1FF'))
+        fig.add_trace(go.Scatter(x=df_proc['Nom_Article'], y=df_proc['Cumul_Pourcentage'], name="% Cumulé", yaxis="y2", line=dict(color='#00FFC2', width=3)))
         fig.update_layout(
-            template="plotly_dark",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            yaxis=dict(title="Annual Value ($)"),
-            yaxis2=dict(title="Cumulative %", overlaying="y", side="right", range=[0, 105]),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(title="Valeur de Consommation"),
+            yaxis2=dict(title="% Cumulé", overlaying="y", side="right", range=[0, 105]),
+            margin=dict(l=0, r=0, t=30, b=0),
+            legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center")
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    with col_right:
-        st.subheader("Inventory Distribution")
-        abc_counts = df['Classe_ABC'].value_counts().reset_index()
-        fig_pie = px.pie(abc_counts, values='count', names='Classe_ABC', 
-                         color='Classe_ABC',
-                         color_discrete_map={'A':'#00FFC2', 'B':'#FFD700', 'C':'#FF6B6B'},
-                         hole=0.4)
-        fig_pie.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)')
+    with col_r:
+        st.subheader("Répartition ABC")
+        counts = df_proc['Classe_ABC'].value_counts().reset_index()
+        fig_pie = px.pie(counts, values='count', names='Classe_ABC', hole=0.6,
+                         color='Classe_ABC', color_discrete_map={'A':'#00FFC2', 'B':'#FFD700', 'C':'#FF6B6B'})
+        fig_pie.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0))
         st.plotly_chart(fig_pie, use_container_width=True)
 
-# --- PAGE: RAW DATA ---
-def show_raw_data():
-    st.title("📋 Inventory Master Data")
-    st.markdown("Modify values directly in the table below to update calculations.")
-    
-    # Upload Feature
-    uploaded_file = st.file_uploader("Upload CSV Data", type="csv")
-    if uploaded_file:
-        st.session_state.inventory_df = pd.read_csv(uploaded_file)
-    
-    # Editable Table
-    edited_df = st.data_editor(
-        st.session_state.inventory_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="data_editor"
-    )
-    
-    if st.button("Save Changes"):
-        st.session_state.inventory_df = edited_df
-        st.success("Data updated successfully!")
-    
-    # Export
-    csv = edited_df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Export to CSV", data=csv, file_name="inventory_data.csv", mime="text/csv")
-
-# --- PAGE: EOQ ANALYSIS ---
-def show_eoq_analysis(df):
-    st.title("📦 EOQ Optimization Analysis")
+elif menu == "Données Brutes":
+    st.markdown('<h1 class="main-title">Gestion des Données</h1>', unsafe_allow_html=True)
     
     st.markdown("""
-    **Understanding the Economic Order Quantity:**
-    The EOQ model minimizes the sum of ordering and holding costs. 
-    High EOQ items suggest volume purchasing, while low EOQ items suggest lean, frequent deliveries.
-    """)
-    
-    # Visualizing EOQ vs Demand
-    fig = px.scatter(df, x="Demande_Annuelle", y="EOQ", size="Valeur_Annuelle", color="Classe_ABC",
-                 hover_name="Nom_Article", text="Nom_Article", log_x=True,
-                 title="EOQ vs Demand (Bubble size = Annual Value)")
-    fig.update_layout(template="plotly_dark")
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Data Table
-    display_cols = ['Nom_Article', 'Demande_Annuelle', 'EOQ', 'Nombre_Commandes_An', 'Temps_Entre_Commandes']
-    st.dataframe(df[display_cols].style.background_gradient(subset=['EOQ'], cmap='GnBu'), use_container_width=True)
-
-# --- PAGE: PARETO ANALYSIS ---
-def show_pareto_details(df):
-    st.title("🎯 ABC Classification Details")
-    
-    col1, col2, col3 = st.columns(3)
-    for cls, color, col in zip(['A', 'B', 'C'], ['#00FFC2', '#FFD700', '#FF6B6B'], [col1, col2, col3]):
-        with col:
-            val = df[df['Classe_ABC'] == cls]['Valeur_Annuelle'].sum()
-            st.markdown(f"<div style='border:1px solid {color}; padding:10px; border-radius:10px; text-align:center;'>"
-                        f"<h3 style='color:{color}'>Class {cls}</h3>"
-                        f"Value: ${val:,.0f}</div>", unsafe_allow_html=True)
-
-    st.write("### Detailed Sorted Inventory")
-    def color_abc(val):
-        color = '#00FFC2' if val == 'A' else '#FFD700' if val == 'B' else '#FF6B6B'
-        return f'background-color: {color}44; color: white'
-
-    st.dataframe(df.style.applymap(color_abc, subset=['Classe_ABC']), use_container_width=True)
-
-# --- PAGE: DECISION INSIGHTS ---
-def show_insights(df):
-    st.title("💡 Strategic Decision Support")
-    
-    # Automated logic
-    top_item = df.iloc[0]
-    high_freq = df.loc[df['Nombre_Commandes_An'].idxmax()]
-    high_eoq = df.loc[df['EOQ'].idxmax()]
-    
-    st.markdown(f"""
-    <div class="insight-card">
-        <h4>🚨 Critical Focus</h4>
-        The item <b>{top_item['Nom_Article']}</b> represents <b>{top_item['Pourcentage_Contribution']:.1f}%</b> of your total inventory value. 
-        Any disruption here has major financial impact.
-    </div>
-    
-    <div class="insight-card">
-        <h4>🔄 Operational Frequency</h4>
-        <b>{high_freq['Nom_Article']}</b> requires the highest replenishment frequency 
-        (<b>{high_freq['Nombre_Commandes_An']} orders/year</b>). Consider negotiating a blanket purchase order 
-        to reduce administrative costs.
-    </div>
-
-    <div class="insight-card" style="border-left-color: #FFD700;">
-        <h4>📦 Storage Strategy</h4>
-        <b>{high_eoq['Nom_Article']}</b> has the highest EOQ (<b>{high_eoq['EOQ']} units</b>). 
-        Ensure your warehouse has sufficient physical capacity for these bulk deliveries.
+    <div class="section-container">
+        Modifiez les valeurs directement dans le tableau ci-dessous. Le système recalculera les métriques instantanément.
     </div>
     """, unsafe_allow_html=True)
     
-    # Inventory Health Score (Mock logic)
-    st.subheader("Inventory Health Score")
-    score = 85 # Calculated mock
-    st.progress(score/100)
-    st.write(f"Current System Optimization: {score}%")
+    edited_df = st.data_editor(
+        st.session_state.data,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="editor"
+    )
+    
+    if st.button("Enregistrer les modifications"):
+        st.session_state.data = edited_df
+        st.success("Base de données mise à jour !")
+        st.rerun()
 
-# --- MAIN APP FLOW ---
-def main():
-    initialize_data()
+elif menu == "Analyse EOQ":
+    st.markdown('<h1 class="main-title">Optimisation EOQ (Wilson)</h1>', unsafe_allow_html=True)
     
-    # Navigation
-    st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2897/2897832.png", width=100)
-    st.sidebar.title("SCM Optimizer v2.0")
-    page = st.sidebar.radio("Navigate to:", 
-        ["Executive Dashboard", "Raw Data", "EOQ Analysis", "Pareto Analysis", "Decision Insights"])
+    st.markdown("### Quantité Économique de Commande par Article")
+    fig_eoq = px.bar(df_proc, x='Nom_Article', y='Q_Economique', color='Q_Economique',
+                     color_continuous_scale='GnBu', labels={'Q_Economique': 'Quantité'})
+    fig_eoq.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)')
+    st.plotly_chart(fig_eoq, use_container_width=True)
     
-    # Process Data
-    processed_df = calculate_metrics(st.session_state.inventory_df)
-    
-    # Page Routing
-    if page == "Executive Dashboard":
-        show_executive_dashboard(processed_df)
-    elif page == "Raw Data":
-        show_raw_data()
-    elif page == "EOQ Analysis":
-        show_eoq_analysis(processed_df)
-    elif page == "Pareto Analysis":
-        show_pareto_details(processed_df)
-    elif page == "Decision Insights":
-        show_insights(processed_df)
+    st.dataframe(df_proc[['Nom_Article', 'Demande_Annuelle', 'Q_Economique', 'Commandes_Par_An', 'Rotation_Jours']], 
+                 use_container_width=True)
 
-if __name__ == "__main__":
-    main()
+elif menu == "Analyse Pareto":
+    st.markdown('<h1 class="main-title">Classement ABC</h1>', unsafe_allow_html=True)
+    
+    # Affichage stylisé
+    for cls in ['A', 'B', 'C']:
+        items = df_proc[df_proc['Classe_ABC'] == cls]
+        with st.expander(f"Classe {cls} - {len(items)} Articles", expanded=(cls=='A')):
+            st.table(items[['Nom_Article', 'Valeur_Annuelle', 'Part_Contribution', 'Cumul_Pourcentage']])
+
+elif menu == "Insights Stratégiques":
+    st.markdown('<h1 class="main-title">Analyses & Décisions</h1>', unsafe_allow_html=True)
+    
+    top_article = df_proc.iloc[0]
+    best_rotation = df_proc.loc[df_proc['Rotation_Jours'].idxmin()]
+    
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        st.markdown(f"""
+        <div class="section-container">
+            <h3 style="color:#00FFC2">⚠️ Priorité d'Approvisionnement</h3>
+            L'article <b>{top_article['Nom_Article']}</b> représente à lui seul <b>{top_article['Part_Contribution']:.1f}%</b> 
+            de la valeur totale de consommation. Un stock de sécurité rigoureux est impératif pour éviter les ruptures.
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with c2:
+        st.markdown(f"""
+        <div class="section-container">
+            <h3 style="color:#00D1FF">🔄 Flux Tendus</h3>
+            <b>{best_rotation['Nom_Article']}</b> nécessite une commande tous les <b>{best_rotation['Rotation_Jours']} jours</b>. 
+            Une automatisation des commandes (EDI) est recommandée pour cet article.
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.subheader("Score de Santé de l'Inventaire")
+    score = 88
+    st.progress(score / 100)
+    st.write(f"Optimisation globale du catalogue : {score}%")
